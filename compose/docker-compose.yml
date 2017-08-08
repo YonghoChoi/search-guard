@@ -1,0 +1,46 @@
+# elasticsearch의 경우 구동을 위한 최소 메모리사양과 vm.max_map_count 값이 있으므로 최소사양보다 적으면 에러가 발생한다. (기본값으로 사용할 경우 최소사양에 미치지 못함.)
+# 호스트 머신에서 구동하는 경우 메모리는 2G 이상일테니 문제가 없지만 가상머신은 기본 1G로 잡히기 때문에 늘려줘야 한다.
+# vm.max_map_count는 커널의 설정이므로 호스트 머신의 값을 변경해주어야 한다. 가상머신을 사용하는 경우 가상 머신 os의 값을 변경해주어야함.
+# 아래 명령 실행
+# sysctl -w vm.max_map_count=262144
+
+# AWS ECR을 사용하기 때문에 로그인 필요. 아래 명령 수행 후 반환되는 텍스트 복사 후 실행 (명령을 수행하려면 awscli 필요)
+# aws ecr get-login --region ap-northeast-1
+version: '2'
+services:
+  elasticsearch:
+    build: ../elasticsearch
+    #volumes:
+    #  - ~/service/data/elasticsearch:/usr/share/elasticsearch/data
+    environment:
+      - cluster.name=es-test
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+  logstash:
+    depends_on:
+      - elasticsearch
+    #image: 138011803946.dkr.ecr.ap-northeast-1.amazonaws.com/hive-logstash:latest
+    build: ../logstash
+    links:
+      - elasticsearch
+    #volumes:
+    #  - ~/service/log/logstash-1:/var/log/logstash
+    environment:
+      - ES_HOST=elasticsearch:9200
+      - ES_INDEX_NAME=es_test
+    ports:
+      - "5000:5000"
+    #network_mode: "host"
+  kibana:
+    depends_on:
+      - elasticsearch
+    build: ../kibana
+    links:
+      - elasticsearch
+    ports:
+      - "5601:5601"
+    environment:
+      - "NODE_OPTIONS=--max-old-space-size=4096"
+      - ELASTICSEARCH_URL=https://elasticsearch:9200
